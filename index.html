@@ -6,75 +6,56 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
-      --bg:#f6f7fb;
-      --card:#fff;
-      --text:#111827;
-      --muted:#6b7280;
-      --border:#d1d5db;
-      --primary:#4338ca;
-      --radius:8px;
+      --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280;
+      --border:#d1d5db; --primary:#4338ca; --radius:8px;
       --shadow:0 4px 6px rgba(0,0,0,.1);
     }
+    * { box-sizing: border-box; }
     body {
-      font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      margin: 0;
-      padding: 2rem;
+      font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      background:var(--bg); color:var(--text); margin:0; padding:2rem;
     }
     form {
-      background: var(--card);
-      padding: 2rem;
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      max-width: 600px;
-      margin: 0 auto;
+      background:var(--card); padding:2rem; border-radius:var(--radius);
+      box-shadow:var(--shadow); max-width:720px; margin:0 auto;
     }
-    h1 { font-size: 1.5rem; }
-    label { display: block; margin-top: 1rem; }
+    h1 { font-size:1.6rem; margin:0 0 1rem; }
+    label { display:block; margin-top:1rem; font-weight:600; }
     input, select {
-      width: 100%;
-      padding: .5rem;
-      margin-top: .25rem;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      width:100%; padding:.6rem .75rem; margin-top:.35rem;
+      border:1px solid var(--border); border-radius:var(--radius);
+      font-size:1rem;
     }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
     button {
-      margin-top: 1.5rem;
-      background: var(--primary);
-      color: white;
-      border: none;
-      padding: 0.75rem 1.5rem;
-      border-radius: var(--radius);
-      cursor: pointer;
+      margin-top:1.5rem; background:var(--primary); color:#fff; border:none;
+      padding:.9rem 1.4rem; border-radius:var(--radius); cursor:pointer; font-weight:700;
     }
-    .hint {
-      margin-top: .5rem;
-      font-size: .875rem;
-      color: var(--muted);
-    }
+    button[disabled] { opacity:.6; cursor:not-allowed; }
+    .hint { margin-top:.6rem; font-size:.9rem; color:var(--muted); }
+    .status { margin-top:1rem; font-size:.95rem; }
+    .ok { color:#0a7a2f; }
+    .err { color:#b00020; }
   </style>
 </head>
 <body>
 
-<form id="memoire-form"
-      action="https://hook.us1.make.com/2926117"
-      method="POST"
-      enctype="multipart/form-data"
-      target="dummyframe"
-      onsubmit="setTimeout(() => window.location.href = 'merci.html', 1000);"
-      novalidate>
-
+<form id="memoire-form" novalidate>
   <h1>Soumission du mémoire / Thesis Submission</h1>
 
-  <label for="prenom">Prénom / Forename *</label>
-  <input type="text" id="prenom" name="prenom" required>
-
-  <label for="nom">Nom / Surname *</label>
-  <input type="text" id="nom" name="nom" required>
+  <div class="row">
+    <div>
+      <label for="prenom">Prénom / Forename *</label>
+      <input type="text" id="prenom" name="prenom" required autocomplete="given-name">
+    </div>
+    <div>
+      <label for="nom">Nom / Surname *</label>
+      <input type="text" id="nom" name="nom" required autocomplete="family-name">
+    </div>
+  </div>
 
   <label for="email">Email *</label>
-  <input type="email" id="email" name="email" required>
+  <input type="email" id="email" name="email" required autocomplete="email">
 
   <label for="titre">Titre du mémoire / Thesis title *</label>
   <input type="text" id="titre" name="titre" required>
@@ -87,7 +68,9 @@
   </select>
 
   <label for="file">Fichier du mémoire / Thesis File *</label>
+  <!-- Uploadcare widget: renvoie une valeur (UUID ou URL) dans ce champ -->
   <input type="hidden"
+         id="file"
          role="uploadcare-uploader"
          name="file"
          data-clearable
@@ -95,34 +78,108 @@
          data-locale="fr"
          data-tabs="file url gdrive dropbox" />
 
-  <label for="rgpd">
+  <label for="rgpd" style="font-weight:400;">
     <input type="checkbox" id="rgpd" name="rgpd" required>
     J’accepte que mes données soient traitées dans le cadre de cette évaluation. / I consent to the processing of my data.
   </label>
 
-  <!-- TOKEN pour le filtre dans Make -->
-  <input type="hidden" name="token" value="2_TOUGH_eval_5_on">
-
-  <button type="submit">Soumettre / Submit</button>
-  <div class="hint" aria-live="polite">Tous les champs sont obligatoires. / All fields are required.</div>
+  <button id="submitBtn" type="submit">Soumettre / Submit</button>
+  <div class="hint" aria-live="polite">
+    Tous les champs sont obligatoires. / All fields are required.
+  </div>
+  <div id="status" class="status" aria-live="polite"></div>
 </form>
 
-<!-- Pour éviter l’ouverture de l’URL Make brut -->
-<iframe name="dummyframe" style="display:none;"></iframe>
-
 <script>
-  UPLOADCARE_PUBLIC_KEY = '21d7228fa1f01ac80183';
-  UPLOADCARE_LOCALE_TRANSLATIONS = {
-    buttons: {
-      choose: {
-        files: {
-          one: 'Choisir un fichier…'
-        }
-      }
-    }
+  // Uploadcare config (clé publique uniquement, pas de secret ici)
+  window.UPLOADCARE_PUBLIC_KEY = '21d7228fa1f01ac80183';
+  window.UPLOADCARE_LOCALE_TRANSLATIONS = {
+    buttons: { choose: { files: { one: 'Choisir un fichier…' } } }
   };
 </script>
 <script src="https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js"></script>
+
+<script>
+(function () {
+  const form = document.getElementById('memoire-form');
+  const submitBtn = document.getElementById('submitBtn');
+  const statusEl = document.getElementById('status');
+
+  const WEBHOOK_URL = 'https://vassili-jdel.app.n8n.cloud/webhook/auto-eval-memoire';
+
+  function setStatus(msg, ok=false) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status ' + (ok ? 'ok' : 'err');
+  }
+
+  function getUploadcareValue() {
+    // La valeur peut être un UUID ou une URL Uploadcare selon la config.
+    const el = document.getElementById('file');
+    return el ? el.value : '';
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setStatus('', true);
+
+    // Validation minimale côté client
+    const requiredIds = ['prenom','nom','email','titre','langue','rgpd'];
+    for (const id of requiredIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      if (el.type === 'checkbox') {
+        if (!el.checked) return setStatus('Veuillez accepter le traitement des données / Please consent to data processing.');
+      } else if (!el.value.trim()) {
+        el.focus();
+        return setStatus('Veuillez compléter tous les champs requis / Please fill all required fields.');
+      }
+    }
+
+    const fileVal = getUploadcareValue();
+    if (!fileVal) {
+      return setStatus('Veuillez téléverser votre fichier / Please upload your file.');
+    }
+
+    // Prépare la charge utile JSON envoyée à n8n (aucun token côté client)
+    const payload = {
+      prenom: document.getElementById('prenom').value.trim(),
+      nom: document.getElementById('nom').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      titre: document.getElementById('titre').value.trim(),
+      langue: document.getElementById('langue').value,
+      file: fileVal,            // UUID ou URL Uploadcare
+      rgpd: true,
+      source: 'web-form'        // utile pour filtrer côté n8n si besoin
+    };
+
+    // Envoi vers n8n
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Envoi… / Sending…';
+
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload),
+        // Pas de credentials, pas de token ici
+      });
+
+      if (res.ok) {
+        // Redirection immédiate vers la page de remerciements
+        window.location.href = 'merci.html';
+      } else {
+        const text = await res.text();
+        setStatus('Erreur de soumission : ' + text);
+      }
+    } catch (err) {
+      setStatus('Erreur réseau : ' + (err?.message || err));
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Soumettre / Submit';
+    }
+  });
+})();
+</script>
 
 </body>
 </html>
