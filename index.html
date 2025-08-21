@@ -68,7 +68,7 @@
   </select>
 
   <label for="file">Fichier du mémoire / Thesis File *</label>
-  <!-- Uploadcare widget: renvoie une valeur (UUID ou URL) dans ce champ -->
+  <!-- Uploadcare widget -->
   <input type="hidden"
          id="file"
          role="uploadcare-uploader"
@@ -91,7 +91,7 @@
 </form>
 
 <script>
-  // Uploadcare config (clé publique uniquement, pas de secret ici)
+  // Uploadcare config (clé publique uniquement)
   window.UPLOADCARE_PUBLIC_KEY = '21d7228fa1f01ac80183';
   window.UPLOADCARE_LOCALE_TRANSLATIONS = {
     buttons: { choose: { files: { one: 'Choisir un fichier…' } } }
@@ -105,7 +105,10 @@
   const submitBtn = document.getElementById('submitBtn');
   const statusEl = document.getElementById('status');
 
-  const WEBHOOK_URL = 'https://vassili-jdel.app.n8n.cloud/webhook/auto-eval-memoire';
+  // 🔗 NOUVEAU WEBHOOK MAKE
+  const WEBHOOK_URL = 'https://hook.eu2.make.com/s9k1fwkt23m6584o1xj8awwirj58d6m4';
+  // 🔑 Token attendu par le scénario Make (filtre). Si tu le retires côté Make, supprime cette ligne du payload.
+  const TOKEN = '2_TOUGH_eval_5_on';
 
   function setStatus(msg, ok=false) {
     statusEl.textContent = msg;
@@ -113,7 +116,6 @@
   }
 
   function getUploadcareValue() {
-    // La valeur peut être un UUID ou une URL Uploadcare selon la config.
     const el = document.getElementById('file');
     return el ? el.value : '';
   }
@@ -140,19 +142,19 @@
       return setStatus('Veuillez téléverser votre fichier / Please upload your file.');
     }
 
-    // Prépare la charge utile JSON envoyée à n8n (aucun token côté client)
+    // Charge utile JSON envoyée à Make
     const payload = {
       prenom: document.getElementById('prenom').value.trim(),
       nom: document.getElementById('nom').value.trim(),
       email: document.getElementById('email').value.trim(),
       titre: document.getElementById('titre').value.trim(),
       langue: document.getElementById('langue').value,
-      file: fileVal,            // UUID ou URL Uploadcare
+      file: fileVal,        // UUID ou URL Uploadcare
       rgpd: true,
-      source: 'web-form'        // utile pour filtrer côté n8n si besoin
+      token: TOKEN,         // nécessaire si le filtre Make est actif
+      source: 'web-form'
     };
 
-    // Envoi vers n8n
     submitBtn.disabled = true;
     submitBtn.textContent = 'Envoi… / Sending…';
 
@@ -160,12 +162,10 @@
       const res = await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(payload),
-        // Pas de credentials, pas de token ici
+        body: JSON.stringify(payload)
       });
 
       if (res.ok) {
-        // Redirection immédiate vers la page de remerciements
         window.location.href = 'merci.html';
       } else {
         const text = await res.text();
