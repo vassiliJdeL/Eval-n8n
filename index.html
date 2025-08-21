@@ -105,10 +105,8 @@
   const submitBtn = document.getElementById('submitBtn');
   const statusEl = document.getElementById('status');
 
-  // 🔗 NOUVEAU WEBHOOK MAKE
+  // 🔗 Webhook Make (actif)
   const WEBHOOK_URL = 'https://hook.eu2.make.com/s9k1fwkt23m6584o1xj8awwirj58d6m4';
-  // 🔑 Token attendu par le scénario Make (filtre). Si tu le retires côté Make, supprime cette ligne du payload.
-  const TOKEN = '2_TOUGH_eval_5_on';
 
   function setStatus(msg, ok=false) {
     statusEl.textContent = msg;
@@ -142,16 +140,15 @@
       return setStatus('Veuillez téléverser votre fichier / Please upload your file.');
     }
 
-    // Charge utile JSON envoyée à Make
+    // Charge utile JSON envoyée à Make (sans token)
     const payload = {
       prenom: document.getElementById('prenom').value.trim(),
       nom: document.getElementById('nom').value.trim(),
       email: document.getElementById('email').value.trim(),
       titre: document.getElementById('titre').value.trim(),
       langue: document.getElementById('langue').value,
-      file: fileVal,        // UUID ou URL Uploadcare
+      file: fileVal,
       rgpd: true,
-      token: TOKEN,         // nécessaire si le filtre Make est actif
       source: 'web-form'
     };
 
