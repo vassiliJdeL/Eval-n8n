@@ -106,7 +106,8 @@
   const statusEl = document.getElementById('status');
 
   // 🔗 Webhook Make (actif)
-const WEBHOOK_URL = 'https://hook.eu2.make.com/u2q5cadr6xc9zck07ipedl6s221y7dmv';
+  const WEBHOOK_URL = 'https://hook.eu2.make.com/u2q5cadr6xc9zck07ipedl6s221y7dmv';
+
   function setStatus(msg, ok=false) {
     statusEl.textContent = msg;
     statusEl.className = 'status ' + (ok ? 'ok' : 'err');
@@ -116,6 +117,9 @@ const WEBHOOK_URL = 'https://hook.eu2.make.com/u2q5cadr6xc9zck07ipedl6s221y7dmv'
     const el = document.getElementById('file');
     return el ? el.value : '';
   }
+
+  // 👉 poignée sur le widget Uploadcare (ajout minimal)
+  const ucWidget = uploadcare.Widget('#file');
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -134,12 +138,29 @@ const WEBHOOK_URL = 'https://hook.eu2.make.com/u2q5cadr6xc9zck07ipedl6s221y7dmv'
       }
     }
 
-    const fileVal = getUploadcareValue();
-    if (!fileVal) {
+    // ✅ Attendre explicitement la fin d'Uploadcare
+    let fileVal = getUploadcareValue();
+    const valObj = ucWidget.value();
+    if (!valObj && !fileVal) {
       return setStatus('Veuillez téléverser votre fichier / Please upload your file.');
     }
 
-    // Charge utile JSON envoyée à Make (sans token)
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Téléversement… / Uploading…';
+
+    try {
+      if (valObj) {
+        const info = await valObj.promise(); // -> { cdnUrl, name, ... }
+        const name = info.name || 'memoire.docx';
+        fileVal = info.cdnUrl + '/-/inline/yes/' + name; // URL binaire directe attendue par l'API
+      }
+    } catch (err) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Soumettre / Submit';
+      return setStatus('Erreur Uploadcare : ' + (err?.message || err));
+    }
+
+    // Charge utile JSON envoyée à Make (file corrigé)
     const payload = {
       prenom: document.getElementById('prenom').value.trim(),
       nom: document.getElementById('nom').value.trim(),
@@ -151,7 +172,6 @@ const WEBHOOK_URL = 'https://hook.eu2.make.com/u2q5cadr6xc9zck07ipedl6s221y7dmv'
       source: 'web-form'
     };
 
-    submitBtn.disabled = true;
     submitBtn.textContent = 'Envoi… / Sending…';
 
     try {
