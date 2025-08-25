@@ -105,8 +105,8 @@
   const submitBtn = document.getElementById('submitBtn');
   const statusEl = document.getElementById('status');
 
-  // 🔗 Webhook n8n (actif)
-  const WEBHOOK_URL = 'https://vassili-jdel.app.n8n.cloud/webhook/auto-eval-memoire';
+  // 🔗 Cible = Worker Cloudflare (le token est injecté côté serveur)
+  const WEBHOOK_URL = 'https://proxy-n8n.vjdlememoires.workers.dev';
 
   function setStatus(msg, ok=false) {
     statusEl.textContent = msg;
@@ -160,7 +160,7 @@
       return setStatus('Erreur Uploadcare : ' + (err?.message || err));
     }
 
-    // Charge utile JSON envoyée à n8n (file corrigé)
+    // Charge utile JSON envoyée au Worker (qui injecte le token serveur-side)
     const payload = {
       prenom: document.getElementById('prenom').value.trim(),
       nom: document.getElementById('nom').value.trim(),
