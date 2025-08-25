@@ -105,8 +105,8 @@
   const submitBtn = document.getElementById('submitBtn');
   const statusEl = document.getElementById('status');
 
-  // 🔗 Webhook Make (actif)
-  const WEBHOOK_URL = 'https://hook.eu2.make.com/u2q5cadr6xc9zck07ipedl6s221y7dmv';
+  // 🔗 Webhook n8n (actif)
+  const WEBHOOK_URL = 'https://vassili-jdel.app.n8n.cloud/webhook/auto-eval-memoire';
 
   function setStatus(msg, ok=false) {
     statusEl.textContent = msg;
@@ -160,7 +160,7 @@
       return setStatus('Erreur Uploadcare : ' + (err?.message || err));
     }
 
-    // Charge utile JSON envoyée à Make (file corrigé)
+    // Charge utile JSON envoyée à n8n (file corrigé)
     const payload = {
       prenom: document.getElementById('prenom').value.trim(),
       nom: document.getElementById('nom').value.trim(),
