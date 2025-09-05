@@ -140,12 +140,16 @@
     submitBtn.textContent = 'Téléversement… / Uploading…';
 
     try {
+
       if (valObj) {
-  const info = await valObj.promise();                 // -> { cdnUrl, name, ... }
+  const info = await valObj.promise();                   // -> { cdnUrl, name, ... }
   const name = info.name || 'memoire.docx';
-  const base = info.cdnUrl.replace('ucarecdn.net','ucarecdn.com');   // normalise le domaine
-  fileVal = `${base}/-/inline/yes/${encodeURIComponent(name)}`;      // ✅ bon chemin + nom encodé
+  // 🔁 IMPORTANT: forcer le domaine public .com
+  const base = info.cdnUrl.replace('ucarecdn.net', 'ucarecdn.com');
+  // ✅ format Uploadcare correct + nom encodé
+  fileVal = `${base}/-/inline/yes/${encodeURIComponent(name)}`;
 }
+    
       }
     } catch (err) {
       submitBtn.disabled = false;
