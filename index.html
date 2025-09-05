@@ -67,12 +67,12 @@
     <option value="anglais">Anglais / English</option>
   </select>
 
-  <label for="file">Fichier du mémoire / Thesis File *</label>
+  <label for="file_url">Fichier du mémoire / Thesis File *</label>
   <!-- Uploadcare widget -->
   <input type="hidden"
-         id="file"
+         id="file_url"
          role="uploadcare-uploader"
-         name="file"
+         name="file_url"
          data-clearable
          data-multiple="false"
          data-locale="fr"
@@ -104,8 +104,8 @@
   const form = document.getElementById('memoire-form');
   const submitBtn = document.getElementById('submitBtn');
   const statusEl = document.getElementById('status');
+  const ucWidget = uploadcare.Widget('#file_url');
 
-  // 🔗 Cible = Worker Cloudflare (le token est injecté côté serveur)
   const WEBHOOK_URL = 'https://proxy-n8n.vjdelmemoires.workers.dev';
 
   function setStatus(msg, ok=false) {
@@ -113,19 +113,11 @@
     statusEl.className = 'status ' + (ok ? 'ok' : 'err');
   }
 
-  function getUploadcareValue() {
-    const el = document.getElementById('file');
-    return el ? el.value : '';
-  }
-
-  // 👉 poignée sur le widget Uploadcare (ajout minimal)
-  const ucWidget = uploadcare.Widget('#file');
-
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     setStatus('', true);
 
-    // Validation minimale côté client
+    // Validation minimale
     const requiredIds = ['prenom','nom','email','titre','langue','rgpd'];
     for (const id of requiredIds) {
       const el = document.getElementById(id);
@@ -138,8 +130,7 @@
       }
     }
 
-    // ✅ Attendre explicitement la fin d'Uploadcare
-    let fileVal = getUploadcareValue();
+    let fileVal = document.getElementById('file_url').value;
     const valObj = ucWidget.value();
     if (!valObj && !fileVal) {
       return setStatus('Veuillez téléverser votre fichier / Please upload your file.');
@@ -150,9 +141,9 @@
 
     try {
       if (valObj) {
-        const info = await valObj.promise(); // -> { cdnUrl, name, ... }
+        const info = await valObj.promise();
         const name = info.name || 'memoire.docx';
-        fileVal = info.cdnUrl + '/-/inline/yes/' + name; // URL binaire directe attendue par l'API
+        fileVal = info.cdnUrl + '/-/inline/yes/' + name;
       }
     } catch (err) {
       submitBtn.disabled = false;
@@ -160,14 +151,13 @@
       return setStatus('Erreur Uploadcare : ' + (err?.message || err));
     }
 
-    // Charge utile JSON envoyée au Worker (qui injecte le token serveur-side)
     const payload = {
       prenom: document.getElementById('prenom').value.trim(),
       nom: document.getElementById('nom').value.trim(),
       email: document.getElementById('email').value.trim(),
       titre: document.getElementById('titre').value.trim(),
       langue: document.getElementById('langue').value,
-      file: fileVal,
+      file_url: fileVal,  // ✅ renommé
       rgpd: true,
       source: 'web-form'
     };
