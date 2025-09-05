@@ -141,9 +141,11 @@
 
     try {
       if (valObj) {
-        const info = await valObj.promise();
-        const name = info.name || 'memoire.docx';
-        fileVal = info.cdnUrl + '/-/inline/yes/' + name;
+  const info = await valObj.promise();                 // -> { cdnUrl, name, ... }
+  const name = info.name || 'memoire.docx';
+  const base = info.cdnUrl.replace('ucarecdn.net','ucarecdn.com');   // normalise le domaine
+  fileVal = `${base}/-/inline/yes/${encodeURIComponent(name)}`;      // ✅ bon chemin + nom encodé
+}
       }
     } catch (err) {
       submitBtn.disabled = false;
