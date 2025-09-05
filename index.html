@@ -90,8 +90,8 @@
   <div id="status" class="status" aria-live="polite"></div>
 </form>
 
+<!-- Uploadcare config -->
 <script>
-  // Uploadcare config (clé publique uniquement)
   window.UPLOADCARE_PUBLIC_KEY = '21d7228fa1f01ac80183';
   window.UPLOADCARE_LOCALE_TRANSLATIONS = {
     buttons: { choose: { files: { one: 'Choisir un fichier…' } } }
@@ -106,7 +106,6 @@
   const statusEl = document.getElementById('status');
   const ucWidget = uploadcare.Widget('#file_url');
 
-  // Webhook n8n (inchangé)
   const WEBHOOK_URL = 'https://vassili-jdel.app.n8n.cloud/webhook/auto-eval-memoire';
 
   function setStatus(msg, ok=false) {
@@ -131,7 +130,7 @@
       }
     }
 
-    // Récupération de l'URL Uploadcare
+    // Récupération Uploadcare
     let fileVal = document.getElementById('file_url').value.trim();
     let fileName = 'memoire.docx';
 
@@ -145,12 +144,10 @@
 
     try {
       if (valObj) {
-        const info = await valObj.promise();    // -> { cdnUrl, name, ... }
-        // ✅ Utiliser l'URL brute fournie par Uploadcare (sans aucune transformation)
-        fileVal = info.cdnUrl;
+        const info = await valObj.promise(); // { cdnUrl, name, ... }
+        // ✅ URL brute, aucune transformation
+        fileVal  = info.cdnUrl;
         fileName = info.name || 'memoire.docx';
-
-        // (facultatif pour debug) : voir l’URL exacte dans la console
         console.log('Uploadcare cdnUrl =', fileVal, 'filename =', fileName);
       }
     } catch (err) {
@@ -159,15 +156,15 @@
       return setStatus('Erreur Uploadcare : ' + (err?.message || err));
     }
 
-    // Charge utile envoyée à n8n
+    // Payload pour n8n
     const payload = {
       prenom: document.getElementById('prenom').value.trim(),
       nom: document.getElementById('nom').value.trim(),
       email: document.getElementById('email').value.trim(),
       titre: document.getElementById('titre').value.trim(),
       langue: document.getElementById('langue').value,
-      file_url: fileVal,     // URL brute d'Uploadcare
-      file_name: fileName,   // nom de fichier transmis séparément
+      file_url: fileVal,     // URL brute Uploadcare
+      file_name: fileName,   // nom séparé
       rgpd: true,
       source: 'web-form'
     };
