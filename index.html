@@ -140,16 +140,12 @@
     submitBtn.textContent = 'Téléversement… / Uploading…';
 
     try {
-
       if (valObj) {
-  const info = await valObj.promise();                   // -> { cdnUrl, name, ... }
-  const name = info.name || 'memoire.docx';
-  // 🔁 IMPORTANT: forcer le domaine public .com
-  const base = info.cdnUrl.replace('ucarecdn.net', 'ucarecdn.com');
-  // ✅ format Uploadcare correct + nom encodé
-  fileVal = `${base}/-/inline/yes/${encodeURIComponent(name)}`;
-}
-    
+        const info = await valObj.promise();                   // -> { cdnUrl, name, ... }
+        // Forcer le domaine public .com
+        const base = (info.cdnUrl || '').replace('ucarecdn.net', 'ucarecdn.com');
+        // ✅ URL simple (sans nom de fichier ajouté, pas de encodeURIComponent)
+        fileVal = base;
       }
     } catch (err) {
       submitBtn.disabled = false;
@@ -163,7 +159,7 @@
       email: document.getElementById('email').value.trim(),
       titre: document.getElementById('titre').value.trim(),
       langue: document.getElementById('langue').value,
-      file_url: fileVal,  // ✅ renommé
+      file_url: fileVal,
       rgpd: true,
       source: 'web-form'
     };
