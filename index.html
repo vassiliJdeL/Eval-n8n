@@ -1,4 +1,72 @@
-<!-- Config Uploadcare (doit être avant la lib) -->
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Soumission du mémoire / Thesis Submission</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280;
+      --border:#d1d5db; --primary:#4338ca; --radius:8px; --shadow:0 4px 6px rgba(0,0,0,.1);
+    }
+    * { box-sizing:border-box }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:2rem}
+    form{background:var(--card);padding:2rem;border-radius:8px;box-shadow:var(--shadow);max-width:720px;margin:0 auto}
+    h1{font-size:1.6rem;margin:0 0 1rem}
+    label{display:block;margin-top:1rem;font-weight:600}
+    input,select{width:100%;padding:.6rem .75rem;margin-top:.35rem;border:1px solid var(--border);border-radius:8px;font-size:1rem}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    button{margin-top:1.5rem;background:var(--primary);color:#fff;border:none;padding:.9rem 1.4rem;border-radius:8px;cursor:pointer;font-weight:700}
+    button[disabled]{opacity:.6;cursor:not-allowed}
+    .hint{margin-top:.6rem;font-size:.9rem;color:var(--muted)}
+    .status{margin-top:1rem;font-size:.95rem}
+    .ok{color:#0a7a2f}.err{color:#b00020}
+  </style>
+</head>
+<body>
+
+<form id="memoire-form" novalidate>
+  <h1>Soumission du mémoire / Thesis Submission</h1>
+
+  <div class="row">
+    <div>
+      <label for="prenom">Prénom / Forename *</label>
+      <input type="text" id="prenom" name="prenom" required autocomplete="given-name">
+    </div>
+    <div>
+      <label for="nom">Nom / Surname *</label>
+      <input type="text" id="nom" name="nom" required autocomplete="family-name">
+    </div>
+  </div>
+
+  <label for="email">Email *</label>
+  <input type="email" id="email" name="email" required autocomplete="email">
+
+  <label for="titre">Titre du mémoire / Thesis title *</label>
+  <input type="text" id="titre" name="titre" required>
+
+  <label for="langue">Langue / Language *</label>
+  <select id="langue" name="langue" required>
+    <option value="">—</option>
+    <option value="français">Français / French</option>
+    <option value="anglais">Anglais / English</option>
+  </select>
+
+  <label for="file_url">Fichier du mémoire / Thesis File *</label>
+  <input type="hidden" id="file_url" role="uploadcare-uploader" name="file_url"
+         data-clearable data-multiple="false" data-locale="fr" data-tabs="file url gdrive dropbox" />
+
+  <label for="rgpd" style="font-weight:400;">
+    <input type="checkbox" id="rgpd" name="rgpd" required>
+    J’accepte que mes données soient traitées dans le cadre de cette évaluation. / I consent to the processing of my data.
+  </label>
+
+  <button id="submitBtn" type="submit">Soumettre / Submit</button>
+  <div class="hint" aria-live="polite">Tous les champs sont obligatoires. / All fields are required.</div>
+  <div id="status" class="status" aria-live="polite"></div>
+</form>
+
+<!-- 1) Config Uploadcare (doit précéder la lib) -->
 <script>
   window.UPLOADCARE_PUBLIC_KEY = '21d7228fa1f01ac80183';
   window.UPLOADCARE_LOCALE_TRANSLATIONS = {
@@ -6,17 +74,21 @@
   };
 </script>
 
-<!-- Librairie Uploadcare -->
-<script src="https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js"></script>
+<!-- 2) Librairie Uploadcare (version fixée) + logs -->
+<script
+  src="https://ucarecdn.com/libs/widget/3.23.3/uploadcare.full.min.js"
+  onload="console.log('[diag] Uploadcare chargé', uploadcare.version)"
+  onerror="console.error('[diag] Échec de chargement Uploadcare')">
+</script>
 
-<!-- Script d'init : attend la lib, puis envoie l'URL brute -->
+<!-- 3) Script d'init (attend la lib, récupère cdnUrl, envoie à n8n) -->
 <script>
 (function () {
   const WEBHOOK_URL = 'https://vassili-jdel.app.n8n.cloud/webhook/auto-eval-memoire';
 
-  function setStatus(msg, ok=false){
+  function setStatus(msg, ok=false) {
     const el = document.getElementById('status');
-    if (el){ el.textContent = msg; el.className = 'status ' + (ok?'ok':'err'); }
+    if (el) { el.textContent = msg; el.className = 'status ' + (ok ? 'ok' : 'err'); }
   }
 
   function initForm() {
@@ -28,50 +100,59 @@
 
     const form = document.getElementById('memoire-form');
     const submitBtn = document.getElementById('submitBtn');
-    const ucWidget = uploadcare.Widget('#file_url');
+    if (!form || !submitBtn) {
+      console.warn('[init] Form/submitBtn introuvables, réessai…');
+      return setTimeout(initForm, 300);
+    }
 
+    const ucWidget = uploadcare.Widget('#file_url');
     ucWidget.onUploadComplete(info => {
       console.log('[uploadcare] onUploadComplete →', info?.cdnUrl, info?.name);
     });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      setStatus('', true);
       console.log('[submit] démarré');
 
       // Validation minimale
       const required = ['prenom','nom','email','titre','langue','rgpd'];
-      for (const id of required){
+      for (const id of required) {
         const el = document.getElementById(id);
         if (!el) continue;
         if (el.type === 'checkbox' && !el.checked) return setStatus('Veuillez accepter le traitement des données.');
         if (el.type !== 'checkbox' && !el.value.trim()) { el.focus(); return setStatus('Veuillez compléter tous les champs.'); }
       }
 
+      // Récupérer l’URL Uploadcare
       let file_url = document.getElementById('file_url').value.trim();
       let file_name = 'memoire.docx';
 
-      submitBtn.disabled = true; submitBtn.textContent = 'Envoi…';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Téléversement… / Uploading…';
 
       try {
         const v = ucWidget.value();
         if (v) {
-          const info = await v.promise();               // { cdnUrl, name, ... }
-          file_url  = info.cdnUrl;                      // ✅ URL brute Uploadcare
+          const info = await v.promise();        // { cdnUrl, name, ... }
+          file_url  = info.cdnUrl;               // ✅ URL brute Uploadcare
           file_name = info.name || file_name;
+          console.log('[submit] URL depuis widget =', file_url, 'filename =', file_name);
         }
       } catch (err) {
         console.error('[submit] Uploadcare error', err);
-        submitBtn.disabled = false; submitBtn.textContent = 'Soumettre / Submit';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Soumettre / Submit';
         return setStatus('Erreur Uploadcare : ' + (err?.message || err));
       }
 
       if (!file_url) {
-        submitBtn.disabled = false; submitBtn.textContent = 'Soumettre / Submit';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Soumettre / Submit';
         return setStatus('Veuillez téléverser votre fichier.');
       }
 
-      console.log('[submit] URL envoyée:', file_url);
-
+      // Envoi vers n8n
       const payload = {
         prenom: document.getElementById('prenom').value.trim(),
         nom: document.getElementById('nom').value.trim(),
@@ -84,18 +165,27 @@
         source: 'web-form'
       };
 
+      submitBtn.textContent = 'Envoi… / Sending…';
+      console.log('[submit] URL envoyée:', file_url);
+
       try {
         const res = await fetch(WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (res.ok) setStatus('Soumission envoyée. Merci !', true);
-        else setStatus('Erreur de soumission : ' + (await res.text()));
+        if (res.ok) {
+          setStatus('Soumission envoyée. Merci !', true);
+          // window.location.href = 'merci.html';
+        } else {
+          const text = await res.text();
+          setStatus('Erreur de soumission : ' + text);
+        }
       } catch (err) {
         setStatus('Erreur réseau : ' + (err?.message || err));
       } finally {
-        submitBtn.disabled = false; submitBtn.textContent = 'Soumettre / Submit';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Soumettre / Submit';
       }
     });
 
@@ -105,3 +195,6 @@
   initForm();
 })();
 </script>
+
+</body>
+</html>
