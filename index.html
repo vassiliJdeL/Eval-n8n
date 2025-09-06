@@ -1,104 +1,3 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <title>Soumission du mémoire / Thesis Submission</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root {
-      --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280;
-      --border:#d1d5db; --primary:#4338ca; --radius:8px;
-      --shadow:0 4px 6px rgba(0,0,0,.1);
-    }
-    * { box-sizing: border-box; }
-    body {
-      font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-      background:var(--bg); color:var(--text); margin:0; padding:2rem;
-    }
-    form {
-      background:var(--card); padding:2rem; border-radius:var(--radius);
-      box-shadow:var(--shadow); max-width:720px; margin:0 auto;
-    }
-    h1 { font-size:1.6rem; margin:0 0 1rem; }
-    label { display:block; margin-top:1rem; font-weight:600; }
-    input, select {
-      width:100%; padding:.6rem .75rem; margin-top:.35rem;
-      border:1px solid var(--border); border-radius:var(--radius);
-      font-size:1rem;
-    }
-    .row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-    button {
-      margin-top:1.5rem; background:var(--primary); color:#fff; border:none;
-      padding:.9rem 1.4rem; border-radius:var(--radius); cursor:pointer; font-weight:700;
-    }
-    button[disabled] { opacity:.6; cursor:not-allowed; }
-    .hint { margin-top:.6rem; font-size:.9rem; color:var(--muted); }
-    .status { margin-top:1rem; font-size:.95rem; }
-    .ok { color:#0a7a2f; }
-    .err { color:#b00020; }
-  </style>
-</head>
-<body>
-
-<form id="memoire-form" novalidate>
-  <h1>Soumission du mémoire / Thesis Submission</h1>
-
-  <div class="row">
-    <div>
-      <label for="prenom">Prénom / Forename *</label>
-      <input type="text" id="prenom" name="prenom" required autocomplete="given-name">
-    </div>
-    <div>
-      <label for="nom">Nom / Surname *</label>
-      <input type="text" id="nom" name="nom" required autocomplete="family-name">
-    </div>
-  </div>
-
-  <label for="email">Email *</label>
-  <input type="email" id="email" name="email" required autocomplete="email">
-
-  <label for="titre">Titre du mémoire / Thesis title *</label>
-  <input type="text" id="titre" name="titre" required>
-
-  <label for="langue">Langue / Language *</label>
-  <select id="langue" name="langue" required>
-    <option value="">—</option>
-    <option value="français">Français / French</option>
-    <option value="anglais">Anglais / English</option>
-  </select>
-
-  <label for="file_url">Fichier du mémoire / Thesis File *</label>
-  <!-- Uploadcare widget -->
-  <input type="hidden"
-         id="file_url"
-         role="uploadcare-uploader"
-         name="file_url"
-         data-clearable
-         data-multiple="false"
-         data-locale="fr"
-         data-tabs="file url gdrive dropbox" />
-
-  <label for="rgpd" style="font-weight:400;">
-    <input type="checkbox" id="rgpd" name="rgpd" required>
-    J’accepte que mes données soient traitées dans le cadre de cette évaluation. / I consent to the processing of my data.
-  </label>
-
-  <button id="submitBtn" type="submit">Soumettre / Submit</button>
-  <div class="hint" aria-live="polite">
-    Tous les champs sont obligatoires. / All fields are required.
-  </div>
-  <div id="status" class="status" aria-live="polite"></div>
-</form>
-
-<!-- Uploadcare config -->
-<script>
-  window.UPLOADCARE_PUBLIC_KEY = '21d7228fa1f01ac80183';
-  window.UPLOADCARE_LOCALE_TRANSLATIONS = {
-    buttons: { choose: { files: { one: 'Choisir un fichier…' } } }
-  };
-</script>
-<script src="https://ucarecdn.com/libs/widget/3.x/uploadcare.full.min.js"></script>
-
 <script>
 (function () {
   const form = document.getElementById('memoire-form');
@@ -113,9 +12,17 @@
     statusEl.className = 'status ' + (ok ? 'ok' : 'err');
   }
 
+  // 🔎 logs utiles
+  ucWidget.onUploadComplete(info => {
+    console.log('[Uploadcare] onUploadComplete →', info?.cdnUrl, info?.name);
+  });
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     setStatus('', true);
+
+    console.log('[submit] démarré');
+    console.log('[submit] ucWidget.value() =', ucWidget.value());
 
     // Validation minimale
     const requiredIds = ['prenom','nom','email','titre','langue','rgpd'];
@@ -130,29 +37,37 @@
       }
     }
 
-    // Récupération Uploadcare
-    let fileVal = document.getElementById('file_url').value.trim();
+    let fileVal = document.getElementById('file_url').value.trim(); // valeur brute du champ caché
     let fileName = 'memoire.docx';
-
-    const valObj = ucWidget.value();
-    if (!valObj && !fileVal) {
-      return setStatus('Veuillez téléverser votre fichier / Please upload your file.');
-    }
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Téléversement… / Uploading…';
 
     try {
+      const valObj = ucWidget.value();
       if (valObj) {
+        // ✅ chemin nominal : on attend la promesse du widget
         const info = await valObj.promise(); // { cdnUrl, name, ... }
-        // ✅ URL brute, aucune transformation
-        fileVal  = info.cdnUrl;
-        fileName = info.name || 'memoire.docx';
-        console.log('Uploadcare cdnUrl =', fileVal, 'filename =', fileName);
+        fileVal  = info.cdnUrl;              // URL brute Uploadcare
+        fileName = info.name || fileName;
+        console.log('[submit] URL depuis widget =', fileVal, 'filename =', fileName);
+      } else if (fileVal) {
+        // 🔁 repli sûr : on reconstruit l’URL canonique à partir du UUID si besoin
+        console.log('[submit] pas de valObj, on utilise la valeur du champ caché =', fileVal);
+        const m = fileVal.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
+        if (m) {
+          fileVal = `https://ucarecdn.com/${m[0]}/`;
+          console.log('[submit] URL canonique reconstruite =', fileVal);
+        }
+      } else {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Soumettre / Submit';
+        return setStatus('Veuillez téléverser votre fichier / Please upload your file.');
       }
     } catch (err) {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Soumettre / Submit';
+      console.error('[submit] Erreur Uploadcare', err);
       return setStatus('Erreur Uploadcare : ' + (err?.message || err));
     }
 
@@ -163,11 +78,13 @@
       email: document.getElementById('email').value.trim(),
       titre: document.getElementById('titre').value.trim(),
       langue: document.getElementById('langue').value,
-      file_url: fileVal,     // URL brute Uploadcare
+      file_url: fileVal,     // ✅ soit cdnUrl, soit URL canonique « https://ucarecdn.com/<UUID>/ »
       file_name: fileName,   // nom séparé
       rgpd: true,
       source: 'web-form'
     };
+
+    console.log('[submit] payload.file_url =', payload.file_url);
 
     submitBtn.textContent = 'Envoi… / Sending…';
 
@@ -182,9 +99,11 @@
         window.location.href = 'merci.html';
       } else {
         const text = await res.text();
+        console.error('[submit] Erreur de soumission', text);
         setStatus('Erreur de soumission : ' + text);
       }
     } catch (err) {
+      console.error('[submit] Erreur réseau', err);
       setStatus('Erreur réseau : ' + (err?.message || err));
     } finally {
       submitBtn.disabled = false;
@@ -193,6 +112,3 @@
   });
 })();
 </script>
-
-</body>
-</html>
