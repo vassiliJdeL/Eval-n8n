@@ -21,6 +21,7 @@
     .hint{margin-top:.6rem;font-size:.9rem;color:var(--muted)}
     .status{margin-top:1rem;font-size:.95rem}
     .ok{color:#0a7a2f}.err{color:#b00020}
+    .small{font-weight:400}
   </style>
 </head>
 <body>
@@ -52,21 +53,17 @@
     <option value="en">Anglais / English</option>
   </select>
 
-  <label for="file_url">Fichier du mémoire / Thesis File *</label>
-  <!-- Uploadcare widget : input hidden + rôle -->
+  <label for="doc">Fichier du mémoire (DOCX recommandé) *</label>
   <input
-    type="hidden"
-    id="file_url"
-    name="file_url"
-    role="uploadcare-uploader"
-    data-clearable
-    data-multiple="false"
-    data-locale="fr"
-    data-tabs="file url gdrive dropbox"
-    data-public-key="21d7228fa1f01ac80183"
+    type="file"
+    id="doc"
+    name="doc"                <!-- IMPORTANT: ce nom deviendra la propriété binaire $binary.doc dans n8n -->
+    accept=".docx,.doc,.pdf"
+    required
   />
+  <div class="hint">Taille maximale conseillée : 20 Mo.</div>
 
-  <label for="rgpd" style="font-weight:400;">
+  <label for="rgpd" class="small">
     <input type="checkbox" id="rgpd" name="rgpd" required>
     J’accepte que mes données soient traitées dans le cadre de cette évaluation. / I consent to the processing of my data.
   </label>
@@ -76,142 +73,82 @@
   <div id="status" class="status" aria-live="polite"></div>
 </form>
 
-<!-- A.1) Config Uploadcare (avant la lib) -->
-<script>
-  // Clé publique & petite traduction bouton
-  window.UPLOADCARE_PUBLIC_KEY = '21d7228fa1f01ac80183';
-  window.UPLOADCARE_LOCALE_TRANSLATIONS = {
-    buttons: { choose: { files: { one: 'Choisir un fichier…' } } }
-  };
-</script>
-
-<!-- A.1) Librairie Uploadcare — version fixée + logs de diagnostic -->
-<script
-  src="https://ucarecdn.com/libs/widget/3.23.3/uploadcare.full.min.js"
-  onload="console.log('[diag] Uploadcare chargé, version =', uploadcare.version)"
-  onerror="console.error('[diag] Échec de chargement Uploadcare')">
-</script>
-
-<!-- Script d’init (attend la lib, récupère cdnUrl, envoie au Webhook n8n) -->
 <script>
 (function () {
+  // 👉 Webhook n8n qui reçoit le multipart/form-data
   const WEBHOOK_URL = 'https://vassili-jdel.app.n8n.cloud/webhook/auto-eval-memoire';
 
+  const form = document.getElementById('memoire-form');
+  const submitBtn = document.getElementById('submitBtn');
+  const statusEl = document.getElementById('status');
+
   function setStatus(msg, ok=false) {
-    const el = document.getElementById('status');
-    if (!el) return;
-    el.textContent = msg;
-    el.className = 'status ' + (ok ? 'ok' : 'err');
+    statusEl.textContent = msg;
+    statusEl.className = 'status ' + (ok ? 'ok' : 'err');
   }
 
-  function initForm() {
-    if (typeof uploadcare === 'undefined') {
-      console.log('[init] Uploadcare pas encore chargé…');
-      return setTimeout(initForm, 300);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setStatus('', true);
+
+    // 1) Validation minimale
+    const required = ['prenom','nom','email','titre','langue','rgpd'];
+    for (const id of required) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      if (el.type === 'checkbox' && !el.checked) return setStatus('Veuillez accepter le traitement des données.');
+      if (el.type !== 'checkbox' && !el.value.trim()) { el.focus(); return setStatus('Veuillez compléter tous les champs.'); }
     }
-    console.log('[init] Uploadcare OK');
 
-    const form = document.getElementById('memoire-form');
-    const submitBtn = document.getElementById('submitBtn');
-    if (!form || !submitBtn) {
-      console.warn('[init] Form/submitBtn introuvables — réessai…');
-      return setTimeout(initForm, 300);
+    const fileInput = document.getElementById('doc');
+    if (!fileInput.files || !fileInput.files[0]) {
+      return setStatus('Veuillez sélectionner votre fichier (DOCX recommandé).');
     }
+    const file = fileInput.files[0];
+    // Optionnel: mini-contrôle d’extension
+    // if (!/\.(docx|doc|pdf)$/i.test(file.name)) return setStatus('Format de fichier non supporté.');
 
-    // Instancie le widget depuis l’input
-    const ucWidget = uploadcare.Widget('#file_url');
+    // 2) Construire le corps multipart/form-data
+    const fd = new FormData();
+    fd.append('prenom',  document.getElementById('prenom').value.trim());
+    fd.append('nom',     document.getElementById('nom').value.trim());
+    fd.append('email',   document.getElementById('email').value.trim());
+    fd.append('titre',   document.getElementById('titre').value.trim());
+    fd.append('langue',  document.getElementById('langue').value);
+    fd.append('rgpd',    'true');
 
-    // Log quand l’upload est fini (utile pour vérifier cdnUrl)
-    ucWidget.onUploadComplete(info => {
-      console.log('[uploadcare] onUploadComplete →', info?.cdnUrl, info?.name);
-    });
+    // 👉 clé **doc** = ce que n8n verra comme $binary.doc
+    fd.append('doc', file, file.name);
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      setStatus('', true);
-      console.log('[submit] démarré');
+    // 3) Envoi
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Téléversement… / Uploading…';
+    console.log('[submit] envoi vers n8n (multipart), file =', file.name, file.type, file.size, 'octets');
 
-      // Validation simple
-      const required = ['prenom','nom','email','titre','langue','rgpd'];
-      for (const id of required) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        if (el.type === 'checkbox' && !el.checked) return setStatus('Veuillez accepter le traitement des données.');
-        if (el.type !== 'checkbox' && !el.value.trim()) { el.focus(); return setStatus('Veuillez compléter tous les champs.'); }
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        body: fd,                 // NE PAS fixer Content-Type manuellement !
+      });
+
+      // n8n peut répondre JSON ou texte – gérons les deux
+      const text = await res.text();
+      if (res.ok) {
+        console.log('[submit] réponse n8n OK:', text);
+        setStatus('Soumission envoyée. Merci !', true);
+        // window.location.href = 'merci.html';
+      } else {
+        console.error('[submit] réponse n8n erreur:', res.status, text);
+        setStatus('Erreur de soumission : ' + text);
       }
-
-      // Valeurs de base
-      let file_url = document.getElementById('file_url').value.trim();
-      let file_name = 'memoire.docx';
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Téléversement… / Uploading…';
-
-      try {
-        const v = ucWidget.value();
-        if (v) {
-          // On attend l’objet info Uploadcare
-          const info = await v.promise();   // { cdnUrl, name, ... }
-          file_url  = info.cdnUrl;          // ✅ URL publique Uploadcare
-          file_name = info.name || file_name;
-          console.log('[submit] URL depuis widget =', file_url, 'filename =', file_name);
-        }
-      } catch (err) {
-        console.error('[submit] Uploadcare error', err);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Soumettre / Submit';
-        return setStatus('Erreur Uploadcare : ' + (err?.message || err));
-      }
-
-      if (!file_url) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Soumettre / Submit';
-        return setStatus('Veuillez téléverser votre fichier.');
-      }
-
-      // Prépare la charge utile pour n8n
-      const payload = {
-        prenom:  document.getElementById('prenom').value.trim(),
-        nom:     document.getElementById('nom').value.trim(),
-        email:   document.getElementById('email').value.trim(),
-        titre:   document.getElementById('titre').value.trim(),
-        langue:  document.getElementById('langue').value,
-        file_url,
-        file_name,
-        rgpd: true,
-        source: 'web-form'
-      };
-
-      submitBtn.textContent = 'Envoi… / Sending…';
-      console.log('[submit] URL envoyée à n8n :', file_url);
-
-      try {
-        const res = await fetch(WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          setStatus('Soumission envoyée. Merci !', true);
-          // 🔁 décommente si tu veux rediriger :
-          // window.location.href = 'merci.html';
-        } else {
-          const text = await res.text();
-          setStatus('Erreur de soumission : ' + text);
-        }
-      } catch (err) {
-        setStatus('Erreur réseau : ' + (err?.message || err));
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Soumettre / Submit';
-      }
-    });
-
-    console.log('[init] Form prêt ✅');
-  }
-
-  // Lance l’init (réessaie tant que la lib n’est pas dispo)
-  initForm();
+    } catch (err) {
+      console.error('[submit] réseau', err);
+      setStatus('Erreur réseau : ' + (err?.message || err));
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Soumettre / Submit';
+    }
+  });
 })();
 </script>
 
