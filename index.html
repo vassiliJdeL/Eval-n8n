@@ -49,12 +49,11 @@
   <label for="langue">Langue / Language *</label>
   <select id="langue" name="langue" required>
     <option value="">—</option>
-    <option value="fr">Français / French</option>
-    <option value="en">Anglais / English</option>
+    <option value="français">Français / French</option>
+    <option value="anglais">Anglais / English</option>
   </select>
 
-  <!-- IMPORTANT : le nom de champ doit être exactement "doc"
-       => n8n le verra comme $binary.doc -->
+  <!-- IMPORTANT : name="doc" => n8n le verra comme $binary.doc -->
   <label for="doc">Fichier du mémoire (DOCX recommandé) *</label>
   <input type="file" id="doc" name="doc" accept=".docx,.doc,.pdf" required />
   <div class="hint">Taille maximale conseillée : 20 Mo.</div>
@@ -104,20 +103,19 @@
     fd.append('titre',   document.getElementById('titre').value.trim());
     fd.append('langue',  document.getElementById('langue').value);
     fd.append('rgpd',    'true');
-    fd.append('doc',     f, f.name);                 // <-- $binary.doc côté n8n
-    fd.append('file_name', f.name);                  // utile pour l’affichage en aval
+    fd.append('doc',     f, f.name);                 // → $binary.doc
+    fd.append('file_name', f.name);
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Téléversement… / Uploading…';
     console.log('[submit] POST multipart →', f.name, f.type, f.size, 'octets');
 
     try {
-      const res  = await fetch(WEBHOOK_URL, { method: 'POST', body: fd }); // ne pas mettre Content-Type
+      const res  = await fetch(WEBHOOK_URL, { method: 'POST', body: fd });
       const text = await res.text();
       if (res.ok) {
         console.log('[submit] n8n OK:', text);
         setStatus('Soumission envoyée. Merci !', true);
-        // window.location.href = 'merci.html';
       } else {
         console.error('[submit] n8n erreur', res.status, text);
         setStatus('Erreur de soumission : ' + text);
