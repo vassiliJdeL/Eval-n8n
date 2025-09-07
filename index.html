@@ -5,10 +5,8 @@
   <title>Soumission du mémoire / Thesis Submission</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root {
-      --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280;
-      --border:#d1d5db; --primary:#4338ca; --radius:8px; --shadow:0 4px 6px rgba(0,0,0,.1);
-    }
+    :root { --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280;
+      --border:#d1d5db; --primary:#4338ca; --radius:8px; --shadow:0 4px 6px rgba(0,0,0,.1); }
     * { box-sizing:border-box }
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:2rem}
     form{background:var(--card);padding:2rem;border-radius:8px;box-shadow:var(--shadow);max-width:720px;margin:0 auto}
@@ -48,13 +46,13 @@
   <label for="langue">Langue / Language *</label>
   <select id="langue" name="langue" required>
     <option value="">—</option>
-    <option value="français">Français / French</option>
-    <option value="anglais">Anglais / English</option>
+    <option value="fr">Français / French</option>
+    <option value="en">Anglais / English</option>
   </select>
 
-  <label for="file_url">Fichier du mémoire / Thesis File *</label>
-  <input type="hidden" id="file_url" role="uploadcare-uploader" name="file_url"
-         data-clearable data-multiple="false" data-locale="fr" data-tabs="file url gdrive dropbox" />
+  <label for="doc">Fichier du mémoire / Thesis File (.docx) *</label>
+  <input id="doc" name="doc" type="file"
+         accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
 
   <label for="rgpd" style="font-weight:400;">
     <input type="checkbox" id="rgpd" name="rgpd" required>
@@ -66,133 +64,74 @@
   <div id="status" class="status" aria-live="polite"></div>
 </form>
 
-<!-- 1) Config Uploadcare (doit précéder la lib) -->
-<script>
-  window.UPLOADCARE_PUBLIC_KEY = '21d7228fa1f01ac80183';
-  window.UPLOADCARE_LOCALE_TRANSLATIONS = {
-    buttons: { choose: { files: { one: 'Choisir un fichier…' } } }
-  };
-</script>
-
-<!-- 2) Librairie Uploadcare (version fixée) + logs -->
-<script
-  src="https://ucarecdn.com/libs/widget/3.23.3/uploadcare.full.min.js"
-  onload="console.log('[diag] Uploadcare chargé', uploadcare.version)"
-  onerror="console.error('[diag] Échec de chargement Uploadcare')">
-</script>
-
-<!-- 3) Script d'init (attend la lib, récupère cdnUrl, envoie à n8n) -->
 <script>
 (function () {
-  const WEBHOOK_URL = 'https://vassili-jdel.app.n8n.cloud/webhook/auto-eval-memoire';
+  const WEBHOOK_URL = 'https://vassili-jdel.app.n8n.cloud/webhook/auto-eval-memoire'; // ← à adapter si besoin
+  const MAX_MB = 20;
 
-  function setStatus(msg, ok=false) {
-    const el = document.getElementById('status');
-    if (el) { el.textContent = msg; el.className = 'status ' + (ok ? 'ok' : 'err'); }
+  const $ = (id) => document.getElementById(id);
+  const setStatus = (msg, ok=false) => {
+    const el = $('status');
+    el.textContent = msg || '';
+    el.className = 'status ' + (ok ? 'ok' : 'err');
+  };
+  const makeRunId = () => 'run_' + Math.random().toString(36).slice(2) + '_' + Date.now().toString(36);
+
+  function validate() {
+    const req = ['prenom','nom','email','titre','langue','doc','rgpd'];
+    for (const id of req) {
+      const el = $(id);
+      if (!el) continue;
+      if (el.type === 'checkbox' && !el.checked) { setStatus('Veuillez accepter le traitement des données.'); return false; }
+      if (el.type === 'file') {
+        if (!el.files || !el.files[0]) { setStatus('Veuillez sélectionner un fichier .docx.'); return false; }
+      } else if (!el.value.trim()) { el.focus(); setStatus('Veuillez compléter tous les champs.'); return false; }
+    }
+    const f = $('doc').files[0];
+    if (!f.name.toLowerCase().endsWith('.docx')) { setStatus('Le fichier doit être en .docx.'); return false; }
+    const mb = f.size/(1024*1024);
+    if (mb > MAX_MB) { setStatus(`Le fichier dépasse ${MAX_MB} Mo (${mb.toFixed(1)} Mo).`); return false; }
+    return true;
   }
 
-  function initForm() {
-    if (typeof uploadcare === 'undefined') {
-      console.log('[init] Uploadcare pas encore chargé…');
-      return setTimeout(initForm, 300);
+  $('memoire-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setStatus('');
+    if (!validate()) return;
+
+    const f = $('doc').files[0];
+    const runId = makeRunId();
+    const fd = new FormData();
+    fd.append('prenom', $('prenom').value.trim());
+    fd.append('nom', $('nom').value.trim());
+    fd.append('email', $('email').value.trim());
+    fd.append('titre', $('titre').value.trim());
+    fd.append('langue', $('langue').value);
+    fd.append('rgpd', 'true');
+    fd.append('source', 'web-form');
+    fd.append('runId', runId);
+    fd.append('file_name', f.name);
+    fd.append('doc', f, f.name); // ← clé binaire attendue côté n8n
+
+    const btn = $('submitBtn');
+    btn.disabled = true; btn.textContent = 'Envoi… / Sending…';
+
+    try {
+      const res = await fetch(WEBHOOK_URL, { method: 'POST', body: fd });
+      if (res.ok) {
+        setStatus('Soumission envoyée. Merci ! Redirection…', true);
+        try { window.location.href = 'merci.html'; } catch (_) {}
+      } else {
+        const text = await res.text();
+        setStatus(`Erreur de soumission (${res.status}) : ${text}`);
+      }
+    } catch (err) {
+      setStatus('Erreur réseau : ' + (err?.message || err));
+      console.error(err);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Soumettre / Submit';
     }
-    console.log('[init] Uploadcare OK');
-
-    const form = document.getElementById('memoire-form');
-    const submitBtn = document.getElementById('submitBtn');
-    if (!form || !submitBtn) {
-      console.warn('[init] Form/submitBtn introuvables, réessai…');
-      return setTimeout(initForm, 300);
-    }
-
-    const ucWidget = uploadcare.Widget('#file_url');
-    ucWidget.onUploadComplete(info => {
-      console.log('[uploadcare] onUploadComplete →', info?.cdnUrl, info?.name);
-    });
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      setStatus('', true);
-      console.log('[submit] démarré');
-
-      // Validation minimale
-      const required = ['prenom','nom','email','titre','langue','rgpd'];
-      for (const id of required) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        if (el.type === 'checkbox' && !el.checked) return setStatus('Veuillez accepter le traitement des données.');
-        if (el.type !== 'checkbox' && !el.value.trim()) { el.focus(); return setStatus('Veuillez compléter tous les champs.'); }
-      }
-
-      // Récupérer l’URL Uploadcare
-      let file_url = document.getElementById('file_url').value.trim();
-      let file_name = 'memoire.docx';
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Téléversement… / Uploading…';
-
-      try {
-        const v = ucWidget.value();
-        if (v) {
-          const info = await v.promise();        // { cdnUrl, name, ... }
-          file_url  = info.cdnUrl;               // ✅ URL brute Uploadcare
-          file_name = info.name || file_name;
-          console.log('[submit] URL depuis widget =', file_url, 'filename =', file_name);
-        }
-      } catch (err) {
-        console.error('[submit] Uploadcare error', err);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Soumettre / Submit';
-        return setStatus('Erreur Uploadcare : ' + (err?.message || err));
-      }
-
-      if (!file_url) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Soumettre / Submit';
-        return setStatus('Veuillez téléverser votre fichier.');
-      }
-
-      // Envoi vers n8n
-      const payload = {
-        prenom: document.getElementById('prenom').value.trim(),
-        nom: document.getElementById('nom').value.trim(),
-        email: document.getElementById('email').value.trim(),
-        titre: document.getElementById('titre').value.trim(),
-        langue: document.getElementById('langue').value,
-        file_url,
-        file_name,
-        rgpd: true,
-        source: 'web-form'
-      };
-
-      submitBtn.textContent = 'Envoi… / Sending…';
-      console.log('[submit] URL envoyée:', file_url);
-
-      try {
-        const res = await fetch(WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          setStatus('Soumission envoyée. Merci !', true);
-          // window.location.href = 'merci.html';
-        } else {
-          const text = await res.text();
-          setStatus('Erreur de soumission : ' + text);
-        }
-      } catch (err) {
-        setStatus('Erreur réseau : ' + (err?.message || err));
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Soumettre / Submit';
-      }
-    });
-
-    console.log('[init] Form prêt ✅');
-  }
-
-  initForm();
+  });
 })();
 </script>
 
